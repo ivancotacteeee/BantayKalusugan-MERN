@@ -16,6 +16,16 @@ import nodemailer from "nodemailer";
 import OpenAI from "openai";
 import cron from "node-cron";
 import admin from "firebase-admin";
+import morgan from "morgan";
+import logger from "./src/utils/logger.js";
+import { authorize } from "./src/middleware/auth.js";
+import { errorHandler } from "./src/middleware/errorHandler.js";
+import { successHandler } from "./src/middleware/successHandler.js";
+import {
+  validateUserRegistration,
+  validateHealthData,
+  validateDeviceStatus,
+} from "./src/middleware/validation.js";
 
 dotenv.config();
 connectMongoDB();
@@ -37,11 +47,12 @@ const serviceAccount = {
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://test-websocket-951a0-default-rtdb.asia-southeast1.firebasedatabase.app/"
+  databaseURL: "https://test-websocket-951a0-default-rtdb.asia-southeast1.firebasedatabase.app/",
 });
-const db = admin.database();
 
+const db = admin.database();
 const currentTime = moment().tz("Asia/Manila").toISOString();
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   port: 465,
@@ -55,80 +66,33 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+app.use(morgan("dev"));
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(cookieParser());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-cron.schedule("0 9 1 * *", async () => {
-  const users = await readData("users");
-  for (const user of users) {
-    if (!user?.data?.email || user?.data?.remind !== true) continue;
-    const mailOptions = {
-      from: '"ICCT SAN MATEO 👻" <cotactearmenion@gmail.com>',
-      to: user.data.email,
-      subject: "Monthly Health Check Reminder",
-      text: `Hello ${user.data.firstName},\n\nThis is your monthly reminder from ICCT Health Monitoring to check and update your health data. Please ensure you monitor your heart rate, SpO2, and weight regularly.\n\nStay healthy!\n\nICCT Health Monitoring Team`,
-    };
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(`Failed to send monthly reminder to ${user.data.email}:`, error);
-      } else {
-        console.log(`Monthly reminder sent to ${user.data.email}:`, info.response);
-      }
-    });
-  }
-});
-
-const authorize = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized. Missing Authorization header.",
-    });
-  }
-  const token = authHeader.split(" ")[1];
-  if (!token || token !== process.env.API_KEY) {
-    return res
-      .status(401)
-      .json({ success: false, message: "Unauthorized. Invalid token." });
-  }
-  next();
-};
+app.use(successHandler);
+app.use(errorHandler);
 
 app.get("/", (req, res) => {
-  res
-    .status(200)
-    .json({ success: true, message: "Welcome to the Health Monitoring API!" });
+  res.success(null, "Welcome to the Health Monitoring API!");
 });
 
-app.post("/api/v1/device-status", authorize, async (req, res) => {
+app.post("/api/v1/devices/status", authorize, validateDeviceStatus, async (req, res, next) => {
   const { deviceId, status } = req.body;
-  if (!deviceId || !status) {
-    return res.status(400).json({ success: false, message: "Device ID and status are required." });
-  }
-
   try {
     const payload = { deviceId, status, timestamp: new Date().toISOString() };
-    
-    // Write to Firebase Realtime Database
     const deviceRef = db.ref("deviceStatus");
     await deviceRef.set(payload);
-    
-    return res.status(200).json({ success: true, message: "Device status updated.", data: payload });
+    res.success(payload, "Device status updated.");
   } catch (err) {
-    console.error("Device status error:", err);
-    return res.status(500).json({ success: false, message: "Internal server error." });
+    logger.error("Device status error", err);
+    next(err);
   }
 });
 
-app.post("/api/v1/users/register", authorize, async (req, res) => {
+app.post("/api/v1/users/register", authorize, validateUserRegistration, async (req, res, next) => {
   const { firstName, lastName, email, age, contactNumber, gender, height, remind } = req.body;
-  if (!firstName || !lastName || !email || !age || !contactNumber || !gender || !height) {
-    return res.status(400).json({ success: false, message: "All fields are required." });
-  }
-
   try {
     const userData = {
       userId: uuidv4(),
@@ -148,77 +112,51 @@ app.post("/api/v1/users/register", authorize, async (req, res) => {
     };
     await writeData("users", userData);
     await refreshData("users");
-    return res
-      .status(201)
-      .json({ success: true, message: "User registered.", userId: userData.userId });
+    res.success({ userId: userData.userId }, "User registered successfully.", 201);
   } catch (err) {
-    console.error("Register error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal server error." });
+    logger.error("User registration error", err);
+    next(err);
   }
 });
 
-app.post("/api/v1/test", authorize, async (req, res) => {
+app.post("/api/v1/health-data/raw", authorize, validateHealthData, async (req, res, next) => {
   const { heartRate, SpO2, weight } = req.body;
-  if (!heartRate && !SpO2 && !weight) {
-    return res
-      .status(400)
-      .json({ success: false, message: "No data provided." });
-  }
-
   try {
     if (weight) {
       const payload = { weight, timestamp: new Date().toISOString() };
-      
       const weightRef = db.ref("healthData/weight");
       await weightRef.set(payload);
-      
-      return res
-        .status(200)
-        .json({ success: true, message: "Weight received.", weight });
+      return res.success({ weight }, "Weight received.");
     }
-    
     if (heartRate && SpO2) {
       const payload = { heartRate, SpO2, timestamp: new Date().toISOString() };
-      
       const vitalsRef = db.ref("healthData/vitals");
       await vitalsRef.set(payload);
-      
-      return res.status(200).json({
-        success: true,
-        message: "Heart rate and SpO2 received.",
-        heartRate,
-        SpO2,
-      });
+      return res.success({ heartRate, SpO2 }, "Heart rate and SpO2 received.");
     }
-    
     return res.status(400).json({
       success: false,
       message: "Invalid data. Provide heart rate, SpO2, or weight.",
     });
   } catch (err) {
-    console.error("Test endpoint error:", err);
-    return res.status(500).json({ success: false, message: "Internal server error." });
+    logger.error("Health data test error", err);
+    next(err);
   }
 });
 
-app.post("/api/v1/users", authorize, async (req, res) => {
-  const { heartRate, SpO2, weight, userId } = req.body;
-
+app.post("/api/v1/users/:userId", authorize, async (req, res, next) => {
+  const { userId } = req.params;
+  const { heartRate, SpO2, weight } = req.body;
   try {
     const users = await readData("users", { userId });
     const user = users.find((u) => u.userId === userId);
-
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
     }
-
     const openai = new OpenAI({
       baseURL: process.env.DEEPSEEK_BASE_URL,
       apiKey: process.env.DEEPSEEK_API_KEY,
     });
-
     const completion = await openai.chat.completions.create({
       messages: [
         {
@@ -228,15 +166,12 @@ app.post("/api/v1/users", authorize, async (req, res) => {
       ],
       model: "deepseek/deepseek-prover-v2:free",
     });
-
     const response = completion.choices[0].message.content;
-
     let BMI = null;
     if (weight && user.data.height) {
       const heightMeters = user.data.height / 100;
       BMI = +(weight / (heightMeters * heightMeters)).toFixed(2);
     }
-
     const mailOptions = {
       from: `"ICCT SAN MATEO 👻" <${process.env.EMAIL_ADDRESS}>`,
       to: user.data.email,
@@ -246,20 +181,15 @@ app.post("/api/v1/users", authorize, async (req, res) => {
         <p>Here is your latest health data analysis:</p>
         <pre style="background:#f4f4f4;padding:10px;border-radius:5px;">${response}</pre>
         <p>Please continue to monitor your health regularly.</p>
-        <p>Stay safe and healthy!</p>
         <br/>
         <p>— <strong>ICCT Health Monitoring Team</strong></p>
       `,
     };
-
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
-        console.error("Error sending email:", error);
-      } else {
-        console.log("Email sent:", info.response);
+        logger.error("Email send error", error);
       }
     });
-
     const updatedData = {
       data: {
         ...user.data,
@@ -268,21 +198,39 @@ app.post("/api/v1/users", authorize, async (req, res) => {
           SpO2: SpO2 || user.data.healthStatus.SpO2,
           weight: weight || user.data.healthStatus.weight,
           BMI: BMI || user.data.healthStatus.BMI,
+          analysis: response, 
         },
       },
       created_at: user.created_at,
       updated_at: currentTime,
     };
-
     await updateData("users", { userId }, updatedData);
     await refreshData("users");
-    return res.status(200).json({ success: true, message: "User updated." });
+    res.success(null, "User updated successfully.");
   } catch (err) {
-    console.error("Update error:", err);
-    return res.status(500).json({ success: false, message: "Internal server error." });
+    logger.error("User update error", err);
+    next(err);
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  logger.info(`Server is running on port ${PORT}`);
+});
+
+cron.schedule("0 9 1 * *", async () => {
+  const users = await readData("users");
+  for (const user of users) {
+    if (!user?.data?.email || user?.data?.remind !== true) continue;
+    const mailOptions = {
+      from: '"ICCT SAN MATEO 👻" <cotactearmenion@gmail.com>',
+      to: user.data.email,
+      subject: "Monthly Health Check Reminder",
+      text: `Hello ${user.data.firstName},\n\nThis is your monthly reminder from ICCT Health Monitoring to check and update your health data. Please ensure you monitor your heart rate, SpO2, and weight regularly.\n\nStay healthy!\n\nICCT Health Monitoring Team`,
+    };
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        logger.error(`Reminder email failed for ${user.data.email}:`, error);
+      }
+    });
+  }
 });

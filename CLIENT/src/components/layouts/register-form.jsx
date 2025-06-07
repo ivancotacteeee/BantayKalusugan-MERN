@@ -77,7 +77,7 @@ export function RegisterForm({ className, ...props }) {
       });
       const responseData = await response.json();
       if (responseData.success) {
-        setIsUserId(responseData.userId);
+        setIsUserId(responseData.data.userId);
         setIsSubmitted(true);
       } else {
         setSubmissionState({ loading: false, success: false, error: true });
@@ -90,7 +90,7 @@ export function RegisterForm({ className, ...props }) {
   const handleAutoSubmit = async (data) => {
     try {
       setSubmissionState({ loading: true, success: false, error: false });
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/users`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/v1/users/${isUserId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,7 +100,6 @@ export function RegisterForm({ className, ...props }) {
           heartRate: data.heartRate,
           SpO2: data.SpO2,
           weight: data.weight,
-          userId: isUserId, 
         }),
       });
       const responseData = await response.json();
@@ -109,6 +108,7 @@ export function RegisterForm({ className, ...props }) {
         setSubmissionState({ loading: false, success: true, error: false });
       } else {
         setSubmissionState({ loading: false, success: false, error: true });
+        console.error("Submission failed:", responseData.message);
       }
     } catch {
       setSubmissionState({ loading: false, success: false, error: true });
