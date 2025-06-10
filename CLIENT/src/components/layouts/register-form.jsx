@@ -22,6 +22,11 @@ export function RegisterForm({ className, ...props }) {
   const [submissionState, setSubmissionState] = useState({ loading: false, success: false, error: false });
   const methods = useForm();
 
+  const playBeep = () => {
+    const audio = new Audio("/sounds/beep2.wav");
+    audio.play();
+  };
+
   useEffect(() => {
     document.title = 'HMS - Health Monitoring System';
   }, []);
@@ -50,6 +55,7 @@ export function RegisterForm({ className, ...props }) {
         return;
       }
       const data = snapshot.val();
+      if (data.heartRate !== null) playBeep();
       setHealthData(prev => ({ ...prev, ...data }));
     });
 
