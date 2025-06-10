@@ -1,6 +1,6 @@
 export const validateUserRegistration = (req, res, next) => {
-  const { firstName, lastName, email, age, contactNumber, gender, height } = req.body;
-  if (!firstName || !lastName || !email || !age || !contactNumber || !gender || !height) {
+  const { firstName, lastName, email, age, contactNumber, gender } = req.body;
+  if (!firstName || !lastName || !email || !age || !contactNumber || !gender) {
     return res.status(400).json({ 
       success: false, 
       message: "All fields are required." 

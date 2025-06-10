@@ -90,7 +90,7 @@ app.post("/api/v1/devices/status", authorize, validateDeviceStatus, async (req, 
 });
 
 app.post("/api/v1/users/register", authorize, validateUserRegistration, async (req, res, next) => {
-  const { firstName, lastName, email, age, contactNumber, gender, remind } = req.body;
+  const { firstName, lastName, email, age, contactNumber, gender } = req.body;
   try {
     const userData = {
       userId: uuidv4(),
