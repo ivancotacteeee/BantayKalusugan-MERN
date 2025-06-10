@@ -17,7 +17,6 @@ import OpenAI from "openai";
 import cron from "node-cron";
 import admin from "firebase-admin";
 import morgan from "morgan";
-import logger from "./src/utils/logger.js";
 import { authorize } from "./src/middleware/auth.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 import { successHandler } from "./src/middleware/successHandler.js";
@@ -86,7 +85,6 @@ app.post("/api/v1/devices/status", authorize, validateDeviceStatus, async (req, 
     await deviceRef.set(payload);
     res.success(payload, "Device status updated.");
   } catch (err) {
-    logger.error("Device status error", err);
     next(err);
   }
 });
@@ -113,7 +111,6 @@ app.post("/api/v1/users/register", authorize, validateUserRegistration, async (r
     await refreshData("users");
     res.success({ userId: userData.userId }, "User registered successfully.", 201);
   } catch (err) {
-    logger.error("User registration error", err);
     next(err);
   }
 });
@@ -138,7 +135,6 @@ app.post("/api/v1/health-data/raw", authorize, validateHealthData, async (req, r
       message: "Invalid data. Provide heart rate, SpO2, or weight.",
     });
   } catch (err) {
-    logger.error("Health data test error", err);
     next(err);
   }
 });
@@ -181,7 +177,7 @@ app.post("/api/v1/users/:userId", authorize, async (req, res, next) => {
     };
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
-        logger.error("Email send error", error);
+        next(error);
       }
     });
     const updatedData = {
@@ -201,13 +197,12 @@ app.post("/api/v1/users/:userId", authorize, async (req, res, next) => {
     await refreshData("users");
     res.success(null, "User updated successfully.");
   } catch (err) {
-    logger.error("User update error", err);
     next(err);
   }
 });
 
 app.listen(PORT, () => {
-  logger.info(`Server is running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
 
 cron.schedule("0 9 1 * *", async () => {
@@ -222,7 +217,7 @@ cron.schedule("0 9 1 * *", async () => {
     };
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
-        logger.error(`Reminder email failed for ${user.data.email}:`, error);
+        console.log(`Reminder email failed for ${user.data.email}:`, error);
       }
     });
   }
