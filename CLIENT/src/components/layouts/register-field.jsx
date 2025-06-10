@@ -76,28 +76,6 @@ export function RegisterFields() {
         {errors.gender && <p className="mt-1 text-sm text-red-600">{errors.gender.message}</p>}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="height">
-          Height (cm)
-        </label>
-        <div className="relative">
-          <input
-            id="height"
-            type="number"
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-            placeholder="170"
-            {...register("height", { 
-              required: "Height is required",
-              min: { value: 50, message: "Height must be at least 50cm" }
-            })}
-          />
-          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500">
-            cm
-          </div>
-        </div>
-        {errors.height && <p className="mt-1 text-sm text-red-600">{errors.height.message}</p>}
-      </div>
-
       <div className="pt-2">
         <button
           type="submit"

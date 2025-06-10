@@ -92,7 +92,7 @@ app.post("/api/v1/devices/status", authorize, validateDeviceStatus, async (req, 
 });
 
 app.post("/api/v1/users/register", authorize, validateUserRegistration, async (req, res, next) => {
-  const { firstName, lastName, email, age, contactNumber, gender, height, remind } = req.body;
+  const { firstName, lastName, email, age, contactNumber, gender, remind } = req.body;
   try {
     const userData = {
       userId: uuidv4(),
@@ -103,9 +103,8 @@ app.post("/api/v1/users/register", authorize, validateUserRegistration, async (r
         age,
         contactNumber,
         gender,
-        height,
         remind: false,
-        healthStatus: { heartRate: null, SpO2: null, weight: null, BMI: null },
+        healthStatus: { heartRate: null, SpO2: null, weight: null },
       },
       created_at: currentTime,
       updated_at: currentTime,
@@ -167,11 +166,6 @@ app.post("/api/v1/users/:userId", authorize, async (req, res, next) => {
       model: "deepseek/deepseek-prover-v2:free",
     });
     const response = completion.choices[0].message.content;
-    let BMI = null;
-    if (weight && user.data.height) {
-      const heightMeters = user.data.height / 100;
-      BMI = +(weight / (heightMeters * heightMeters)).toFixed(2);
-    }
     const mailOptions = {
       from: `"ICCT SAN MATEO 👻" <${process.env.EMAIL_ADDRESS}>`,
       to: user.data.email,
@@ -197,7 +191,6 @@ app.post("/api/v1/users/:userId", authorize, async (req, res, next) => {
           heartRate: heartRate || user.data.healthStatus.heartRate,
           SpO2: SpO2 || user.data.healthStatus.SpO2,
           weight: weight || user.data.healthStatus.weight,
-          BMI: BMI || user.data.healthStatus.BMI,
           analysis: response, 
         },
       },
