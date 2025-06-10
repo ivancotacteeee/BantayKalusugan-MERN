@@ -23,6 +23,10 @@ export function RegisterForm({ className, ...props }) {
   const methods = useForm();
 
   useEffect(() => {
+    document.title = 'HMS - Health Monitoring System';
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(() => setIsBeating(prev => !prev), 1200);
     return () => clearInterval(interval);
   }, []);
