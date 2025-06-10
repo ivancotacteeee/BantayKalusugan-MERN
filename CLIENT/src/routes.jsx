@@ -3,7 +3,7 @@ import RegisterPage from "@/pages/Register";
 
 const Routes = () => {
     const routesForPublic = [
-        { path: "/register", element: <RegisterPage /> },
+        { path: "/", element: <RegisterPage /> },
     ];
 
     const router = createBrowserRouter([
