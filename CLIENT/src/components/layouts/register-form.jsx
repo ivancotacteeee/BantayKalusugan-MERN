@@ -66,6 +66,7 @@ export function RegisterForm({ className, ...props }) {
         return;
       }
       const data = snapshot.val();
+      if (data.weight !== null) playBeep();
       setHealthData(prev => ({ ...prev, weight: data.weight }));
     });
 
